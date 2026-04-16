@@ -19,8 +19,16 @@ app.post('/v1/chat/completions', async (req, res, next) => {
   };
 
   const userId = user || 'user_a';
+  const totalChars = JSON.stringify(messages).length;
+  const lastRole = messages[messages.length - 1]?.role;
+  console.log(`[request] userId=${userId} messages=${messages.length} totalChars=${totalChars} lastRole=${lastRole}`);
   const lastMessage = messages[messages.length - 1];
-  const userText = lastMessage?.content || '';
+  // content can be a string or an array of content parts (OpenAI multipart format)
+  const rawContent = lastMessage?.content;
+  const userText: string = Array.isArray(rawContent)
+    ? rawContent.map((p: { type: string; text?: string }) => p.text ?? '').join('')
+    : (rawContent as string) || '';
+  console.log(`[userText] len=${userText.length} preview="${userText.slice(0, 80)}"`);
 
   // 설정 명령어 파싱: "모델 X로 바꿔줘"
   const modelMatch = userText.match(/모델\s+([\w:.-]+)(?:으?로|로)\s*바꿔/);

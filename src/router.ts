@@ -18,7 +18,7 @@ export async function callOllama(
     const res = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: false }),
+      body: JSON.stringify({ model, messages, stream: false, options: { num_predict: 512 } }),
       signal: controller.signal,
     });
     const data = (await res.json()) as { message: { content: string } };
