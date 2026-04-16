@@ -1,0 +1,52 @@
+{
+  "models": {
+    "providers": {
+      "local-router": {
+        "baseUrl": "http://localhost:4000/v1",
+        "apiKey": "local",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "gemma4:e4b-it-q4_K_M",
+            "name": "Gemma4 E4B (Ollama)",
+            "contextWindow": 32000,
+            "maxTokens": 4096
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "local-router/gemma4:e4b-it-q4_K_M",
+      "llm": {
+        "idleTimeoutSeconds": 600
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "YOUR_GATEWAY_TOKEN"
+    }
+  },
+  "channels": {
+    "discord": {
+      "token": "YOUR_DISCORD_BOT_TOKEN",
+      "dmPolicy": "open",
+      "groupPolicy": "open",
+      "enabled": true,
+      "allowFrom": ["*"]
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "discord",
+        "guildId": "YOUR_GUILD_ID"
+      }
+    }
+  ]
+}
