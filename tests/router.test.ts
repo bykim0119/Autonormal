@@ -1,4 +1,4 @@
-import { callOllama, judgeResponse, route } from '../src/router';
+import { callOllama, route } from '../src/router';
 import { createStore } from '../src/store';
 import os from 'os';
 import path from 'path';
@@ -37,42 +37,27 @@ describe('callOllama', () => {
   });
 });
 
-describe('judgeResponse', () => {
-  it('"yes"로 시작하는 응답이면 true 반환', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: { content: 'yes' } }),
-    });
-    expect(await judgeResponse('질문', '답변', testStore)).toBe(true);
-  });
-
-  it('"no"로 시작하는 응답이면 false 반환', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: { content: 'no' } }),
-    });
-    expect(await judgeResponse('질문', '답변', testStore)).toBe(false);
-  });
-});
-
 describe('route', () => {
-  it('judge가 yes면 Ollama 응답 반환', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: { content: '좋은 답변입니다' } }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: { content: 'yes' } }) });
+  it('Ollama 응답을 바로 반환', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ message: { content: '좋은 답변입니다' } }),
+    });
 
     const result = await route('user_a', '안녕', testStore);
     expect(result).toBe('좋은 답변입니다');
-    expect(global.fetch).toHaveBeenCalledTimes(2); // Ollama + judge
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('judge가 no이고 Codex 실패 시 "[로컬 모델 응답]" 포함 반환', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: { content: '짧은 답' } }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: { content: 'no' } }) })
-      .mockRejectedValueOnce(new Error('Codex API error'));
+  it('히스토리에 user/assistant 메시지가 추가됨', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ message: { content: '응답' } }),
+    });
 
-    const result = await route('user_a', '어려운 질문', testStore);
-    expect(result).toContain('[로컬 모델 응답]');
+    await route('user_b', '질문', testStore);
+    const history = testStore.getUserData('user_b').history;
+    expect(history).toContainEqual({ role: 'user', content: '질문' });
+    expect(history).toContainEqual({ role: 'assistant', content: '응답' });
   });
 });

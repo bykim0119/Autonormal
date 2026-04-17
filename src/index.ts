@@ -9,13 +9,33 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 4000;
 
+// SSE 스트리밍 응답 헬퍼
+function sendStreaming(res: express.Response, content: string) {
+  const id = `chatcmpl-${Date.now()}`;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const chunkSize = 20;
+  for (let i = 0; i < content.length; i += chunkSize) {
+    const delta = content.slice(i, i + chunkSize);
+    const chunk = { id, object: 'chat.completion.chunk', choices: [{ index: 0, delta: { role: 'assistant', content: delta }, finish_reason: null }] };
+    res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+  }
+  const done = { id, object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] };
+  res.write(`data: ${JSON.stringify(done)}\n\n`);
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+
 // OpenClaw가 호출하는 OpenAI 호환 엔드포인트
 // OpenClaw는 { messages, user } 형식으로 전송
 app.post('/v1/chat/completions', async (req, res, next) => {
   try {
-  const { messages, user } = req.body as {
+  const { messages, user, stream } = req.body as {
     messages: Array<{ role: string; content: string }>;
     user?: string;
+    stream?: boolean;
   };
 
   const userId = user || 'user_a';
@@ -30,22 +50,26 @@ app.post('/v1/chat/completions', async (req, res, next) => {
     : (rawContent as string) || '';
   console.log(`[userText] len=${userText.length} preview="${userText.slice(0, 80)}"`);
 
+  const sendResponse = (content: string) => {
+    if (stream) {
+      sendStreaming(res, content);
+    } else {
+      res.json({ choices: [{ message: { role: 'assistant', content } }] });
+    }
+  };
+
   // 설정 명령어 파싱: "모델 X로 바꿔줘"
   const modelMatch = userText.match(/모델\s+([\w:.-]+)(?:으?로|로)\s*바꿔/);
   if (modelMatch) {
     const newModel = modelMatch[1];
     store.setPreferredModel(userId, newModel);
-    return res.json({
-      choices: [{ message: { role: 'assistant', content: `모델을 ${newModel}으로 변경했습니다.` } }],
-    });
+    return sendResponse(`모델을 ${newModel}으로 변경했습니다.`);
   }
 
   // 모델 초기화: "모델 기본값으로 바꿔줘"
   if (userText.includes('모델') && userText.includes('기본값')) {
     store.setPreferredModel(userId, null);
-    return res.json({
-      choices: [{ message: { role: 'assistant', content: '모델을 기본값(Gemma4 E4B)으로 초기화했습니다.' } }],
-    });
+    return sendResponse('모델을 기본값(Gemma4 E4B)으로 초기화했습니다.');
   }
 
   // 온디맨드 크롤링: "X 뉴스 N개 요약해줘"
@@ -64,12 +88,12 @@ app.post('/v1/chat/completions', async (req, res, next) => {
     const newsText = itemsToText(items);
     const prompt = `다음 뉴스를 각 항목별로 한 줄씩 한국어로 요약해줘:\n\n${newsText}`;
     const summary = await route(userId, prompt);
-    return res.json({ choices: [{ message: { role: 'assistant', content: summary } }] });
+    return sendResponse(summary);
   }
 
   // 일반 대화
-    const response = await route(userId, userText);
-    res.json({ choices: [{ message: { role: 'assistant', content: response } }] });
+  const response = await route(userId, userText);
+  sendResponse(response);
   } catch (err) {
     next(err);
   }
@@ -106,8 +130,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`AI Router running on :${PORT}`);
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`AI Router running on ${HOST}:${PORT}`);
 });
 
 export default app;

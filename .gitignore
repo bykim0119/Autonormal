@@ -2,3 +2,10 @@ node_modules/
 dist/
 data/
 .env
+
+# Local copies (not part of this repo)
+ai-router/
+openclaw/
+
+# Systemd service files (contain local paths)
+*.service
