@@ -55,6 +55,24 @@ plugins/subagent_coder/
 
 원본 6개 신규 파일 + 2개 큰 inline 추출 + 1개 model provider plugin 통합 → **단일 패키지**.
 
+코어(`codex_exec_client`, `coder_sessions`, `coder_progress_formatter`, `coder_event_bus`, `coder_config`, `delegate_background`)는 **platform-agnostic**. 통합 레이어(`discord_overlay`)만 Discord 전용. 미래에 Teams/Slack 등 platform 추가 시 `*_overlay.py`를 같은 패키지에 더하는 형태로 확장.
+
+### 5.1.1 `plugin.yaml`
+
+```yaml
+name: subagent_coder
+label: "Codex Coder Sub-Agent (Discord)"
+description: |
+  Background coding delegation via Codex CLI.
+  Spawns ``codex exec`` subprocess in a daemon thread and routes
+  live progress to the platform UI.
+  Currently integrates with Discord; core is platform-agnostic.
+```
+
+- `name` (internal): plugin loader가 정렬·식별에 사용. 'd'(=`discord`)보다 뒤 알파벳이어야 loading order 우회 (검증 결과 2). `subagent_coder`는 's' > 'd' ✓ + hermes의 기존 `_subagent_id` 어휘와 일치.
+- `label` (user-facing): Marketplace / `hermes gateway setup` 등 사용자 노출 표면에서 보이는 이름. 현 Discord-only 범위를 정직하게 명시.
+- ⚠ plugin.yaml이 정말 `label`/`description` 필드를 지원하는지는 Open Item 1번에서 확정. 미지원이면 plugin name과 user-facing 이름 분리 불가 — 그땐 P3 PR(label 필드 추가)을 병행 또는 `name`을 user-friendly하게 변경 (예: `subagent_codex_coder`).
+
 ### 5.2 `register(ctx)` 책임
 
 `plugins/subagent_coder/__init__.py:register(ctx)`가 다음을 모두 wire:
@@ -140,8 +158,11 @@ adapter 인스턴스가 생성된 직후 호출 (factory wrap에서). 다음을 
 
 ## 9. Open Items (Step 0에서 grep으로 확정)
 
-1. **Plugin 정렬 키**: `_plugins.items()`의 key가 plugin.yaml `name` 필드인지 디렉터리 path인지.
-2. **Naming 컨벤션**: 기존 plugin들이 `topic_*` 같은 prefix 컨벤션을 따르는지 (예: `platforms/`, `model-providers/`).
+1. **Plugin 정렬 키 + 사용자-노출 필드**:
+   - (a) `_plugins.items()`의 key가 plugin.yaml `name` 필드인지 디렉터리 path인지.
+   - (b) plugin.yaml이 `label`/`display_name`/`description` 같은 사용자-노출 필드를 지원하는지 (`gateway/platform_registry.py:PlatformEntry`에서 `label` 필드 노출 확인됨, plugin 일반에도 적용되는지 검증).
+   - (b) 미지원 시 `name`을 user-friendly하게 변경 (예: `subagent_codex_coder`) 또는 P3 PR 병행.
+2. **Naming 컨벤션**: 기존 plugin들이 `topic_*` 같은 prefix 컨벤션을 따르는지 (예: `platforms/`, `model-providers/`). 코어가 platform-agnostic이라 `platforms/` 하위는 부적합 — top-level 또는 별도 namespace 결정 필요.
 3. **`_HERMES_CORE_TOOLS` mutate 가능성**: register 시점에 list.append이 작동하는지, 아니면 frozen인지.
 4. **Adapter post-connect hook**: `BasePlatformAdapter`가 노출하는 lifecycle 콜백 중 `_client` 생성 후 시점이 있는지.
 5. **Credential resolver hook**: `resolve_external_process_provider_credentials`가 plugin-friendly한 등록 메커니즘이 있는지, 아니면 inline patch 필요한지.
