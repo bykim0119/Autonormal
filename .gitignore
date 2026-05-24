@@ -6,6 +6,7 @@ data/
 # Local copies (not part of this repo)
 ai-router/
 openclaw/
+hermes-agent/
 
 # Systemd service files (contain local paths)
 *.service
